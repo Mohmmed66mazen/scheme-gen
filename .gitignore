@@ -1,0 +1,10 @@
+# Generated files
+apis_*.dart
+lib/generated/
+
+# Dart related
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
