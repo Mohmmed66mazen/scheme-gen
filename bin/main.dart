@@ -160,17 +160,28 @@ class OpenApiGenerator {
     if (schema['type'] != 'object') return;
 
     final properties = schema['properties'] as Map<String, dynamic>? ?? {};
-    final requiredProps =
-        (schema['required'] as List<dynamic>?)?.cast<String>() ?? [];
+   
+
+    final Map<String, bool> isNullableMap = {};
+    for (final propName in properties.keys) {
+      final propSchema = properties[propName] as Map<String, dynamic>;
+      final propType = propSchema['type'];
+      bool canBeNull = false;
+      if (propType is List) {
+        canBeNull = propType.contains('null');
+      } else if (propSchema['nullable'] == true) {
+        canBeNull = true;
+      }
+      isNullableMap[propName] =  canBeNull;
+    }
 
     buffer.writeln('class $className {');
 
     // Fields
     for (final propName in properties.keys) {
       final propSchema = properties[propName] as Map<String, dynamic>;
-      final isRequired = requiredProps.contains(propName);
       final type = _getDartType(propSchema);
-      final nullable = isRequired ? '' : '?';
+      final nullable = isNullableMap[propName]! ? '?' : '';
       buffer.writeln('  final $type$nullable $propName;');
     }
     buffer.writeln();
@@ -178,8 +189,7 @@ class OpenApiGenerator {
     // Constructor
     buffer.writeln('  $className({');
     for (final propName in properties.keys) {
-      final isRequired = requiredProps.contains(propName);
-      buffer.writeln('    ${isRequired ? 'required ' : ''}this.$propName,');
+      buffer.writeln('    ${isNullableMap[propName]! ? '' : 'required'} this.$propName,');
     }
     buffer.writeln('  });');
     buffer.writeln();
@@ -190,11 +200,11 @@ class OpenApiGenerator {
     );
     for (final propName in properties.keys) {
       final propSchema = properties[propName] as Map<String, dynamic>;
-      final isRequired = requiredProps.contains(propName);
+      final isNullable = isNullableMap[propName]!;
       final fromJsonExpr = _getFromJsonExpression(
         propSchema,
         'json[\'$propName\']',
-        isRequired,
+        isNullable,
         propName,
       );
       buffer.writeln('    $propName: $fromJsonExpr,');
@@ -224,13 +234,29 @@ class OpenApiGenerator {
 
     final type = schema['type'];
     if (type is List) {
-      final nonNullType = type.firstWhere(
-        (t) => t != 'null',
-        orElse: () => 'dynamic',
-      );
-      return _mapTypeToDart(nonNullType, schema);
+      return _getTypeFromList(type, schema);
+    } else {
+      return _mapTypeToDart(type as String?, schema);
     }
-    return _mapTypeToDart(type as String?, schema);
+  }
+
+  String _getTypeFromList(List<dynamic> types, Map<String, dynamic> schema) {
+    final format = schema['format'] as String?;
+    if (format != null) {
+      switch (format) {
+        case 'int32':
+          return 'int';
+        case 'date-time':
+          return 'DateTime';
+        case 'uuid':
+          return 'String';
+      }
+    }
+    final nonNullType = types.firstWhere(
+      (t) => t != 'null',
+      orElse: () => 'dynamic',
+    );
+    return _mapTypeToDart(nonNullType as String?, schema);
   }
 
   String _mapTypeToDart(String? type, Map<String, dynamic> schema) {
@@ -254,7 +280,7 @@ class OpenApiGenerator {
   String _getFromJsonExpression(
     Map<String, dynamic> schema,
     String access,
-    bool isRequired,
+    bool isNullable,
     String propName,
   ) {
     final ref = schema['\$ref'] as String?;
@@ -263,7 +289,7 @@ class OpenApiGenerator {
       final refSchema = allSchemas[name];
       if (refSchema != null && refSchema['type'] == 'object') {
         final expr = '$name.fromJson($access)';
-        return isRequired ? expr : '$access != null ? $expr : null';
+        return isNullable ? '$access != null ? $expr : null' : expr;
       }
     }
 
@@ -278,18 +304,18 @@ class OpenApiGenerator {
         if (itemSchema != null && itemSchema['type'] == 'object') {
           final mapExpr =
               '($access as List).map((e) => $itemName.fromJson(e)).toList()';
-          return isRequired ? mapExpr : '$access != null ? $mapExpr : null';
+          return isNullable ? '$access != null ? $mapExpr : null' : mapExpr;
         }
       }
 
       // Handle List<String>, List<int>, etc.
       if (itemType != 'dynamic') {
         final castExpr = '($access as List).cast<$itemType>()';
-        return isRequired ? castExpr : '$access != null ? $castExpr : null';
+        return isNullable ? '$access != null ? $castExpr : null' : castExpr;
       }
 
       final listExpr = 'List.from($access)';
-      return isRequired ? listExpr : '$access != null ? $listExpr : null';
+      return isNullable ? '$access != null ? $listExpr : null' : listExpr;
     }
 
     return access;

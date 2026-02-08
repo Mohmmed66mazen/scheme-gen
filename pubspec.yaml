@@ -1,7 +1,10 @@
 name: scheme_gen
-description: A sample command-line application.
+description: a Dart package for generating Dart models and services from OpenAPI JSON.
 version: 1.0.0
 # repository: https://github.com/my_org/my_repo
+
+executables: 
+  scheme_gen: main
 
 environment:
   sdk: ^3.10.1
