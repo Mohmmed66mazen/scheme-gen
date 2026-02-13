@@ -1,6 +1,6 @@
 name: scheme_gen
 description: a Dart package for generating Dart models and services from OpenAPI JSON.
-version: 1.0.0
+version: 1.0.2
 # repository: https://github.com/my_org/my_repo
 
 executables: 

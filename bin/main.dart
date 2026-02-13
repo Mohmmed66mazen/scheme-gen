@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:args/args.dart';
 
 /// CLI for generating Dart models and services from OpenAPI JSON.
+/// Usage:
+///  dart run bin/main.dart --input api.json --output models/api
 void main(List<String> arguments) {
   final parser = ArgParser()
     ..addOption('input', abbr: 'i', help: 'Path to OpenAPI JSON file')
@@ -17,7 +19,7 @@ void main(List<String> arguments) {
   final argResults = parser.parse(arguments);
 
   if (argResults['help']) {
-    print('OpenAPI Dart Scheme Generator');
+    print('OpenAPI Dart Scheme Generator - Version 1.0.1');
     print('Usage: dart run bin/scheme_gen.dart [options]');
     print(parser.usage);
     exit(0);
@@ -104,24 +106,11 @@ class OpenApiGenerator {
   Map<String, Set<String>> _collectSchemasByTag() {
     final tagToSchemas = <String, Set<String>>{};
 
-    void addSchema(String tag, String schemaRef) {
-      if (schemaRef.startsWith('#/components/schemas/')) {
-        final schemaName = schemaRef.split('/').last;
-        tagToSchemas.putIfAbsent(tag, () => {}).add(schemaName);
-      }
-    }
-
     void processSchema(dynamic schema, String tag) {
       if (schema is Map<String, dynamic>) {
-        final ref = schema['\$ref'] as String?;
-        if (ref != null) {
-          addSchema(tag, ref);
-        } else if (schema['type'] == 'array') {
-          final items = schema['items'];
-          if (items is Map<String, dynamic>) {
-            final ref = items['\$ref'] as String?;
-            if (ref != null) addSchema(tag, ref);
-          }
+        final refs = _findRefsInSchema(schema);
+        for (final ref in refs) {
+          tagToSchemas.putIfAbsent(tag, () => {}).add(ref);
         }
       }
     }
@@ -149,7 +138,53 @@ class OpenApiGenerator {
         }
       }
     }
+
+    // Recursively collect all dependent schemas for each tag
+    for (final tag in tagToSchemas.keys) {
+      final schemas = tagToSchemas[tag]!;
+      final queue = schemas.toList();
+      var i = 0;
+      while (i < queue.length) {
+        final currentSchemaName = queue[i++];
+        final schema = allSchemas[currentSchemaName];
+        if (schema is Map<String, dynamic>) {
+          final deps = _findRefsInSchema(schema);
+          for (final dep in deps) {
+            if (schemas.add(dep)) {
+              queue.add(dep);
+            }
+          }
+        }
+      }
+    }
+
     return tagToSchemas;
+  }
+
+  Set<String> _findRefsInSchema(Map<String, dynamic> schema) {
+    final refs = <String>{};
+    void walk(dynamic node) {
+      if (node is Map<String, dynamic>) {
+        if (node.containsKey('\$ref')) {
+          final ref = node['\$ref'] as String;
+          if (ref.startsWith('#/components/schemas/')) {
+            refs.add(ref.split('/').last);
+          }
+        }
+        // Check properties, items, oneOf, anyOf, allOf
+        node.forEach((key, value) {
+          if (key != '\$ref') {
+            walk(value);
+          }
+        });
+      } else if (node is List) {
+        for (final item in node) {
+          walk(item);
+        }
+      }
+    }
+    walk(schema);
+    return refs;
   }
 
   void _generateModelClass(
