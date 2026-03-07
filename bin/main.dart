@@ -19,7 +19,7 @@ void main(List<String> arguments) {
   final argResults = parser.parse(arguments);
 
   if (argResults['help']) {
-    print('OpenAPI Dart Scheme Generator - Version 1.0.4');
+    print('OpenAPI Dart Scheme Generator - Version 1.0.6');
     print('Usage: dart run bin/scheme_gen.dart [options]');
     print(parser.usage);
     exit(0);
@@ -337,7 +337,7 @@ class OpenApiGenerator {
         case 'int32':
           return 'int';
         case 'date-time':
-          return 'DateTime';
+          return 'String';
         case 'uuid':
           return 'String';
       }
@@ -356,7 +356,7 @@ class OpenApiGenerator {
         case 'int32':
           return 'int';
         case 'date-time':
-          return 'DateTime';
+          return 'String';
         case 'uuid':
           return 'String';
       }
