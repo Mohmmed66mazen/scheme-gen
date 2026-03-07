@@ -120,6 +120,46 @@
         }
       }
     },
+    "/api/students/account/sign-out": {
+      "post": {
+        "tags": [
+          "StudentAccount"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/students/account/logout-all": {
+      "post": {
+        "tags": [
+          "StudentAccount"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
     "/api/students/account/refresh-token/{token}": {
       "get": {
         "tags": [
@@ -332,10 +372,7 @@
             "required": true,
             "schema": {
               "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
+              "type": "integer",
               "format": "int32"
             }
           }
@@ -374,7 +411,7 @@
         }
       }
     },
-    "/api/students/library/folders/{id}": {
+    "/api/students/library/sections/{sectionId}/folders/{id}": {
       "get": {
         "tags": [
           "StudentLibrary"
@@ -382,6 +419,16 @@
         "parameters": [
           {
             "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "sectionId",
             "in": "path",
             "required": true,
             "schema": {
@@ -418,6 +465,75 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/students/notifications/register-token": {
+      "post": {
+        "tags": [
+          "StudentNotifications"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterTokenRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/api/students/notifications": {
+      "get": {
+        "tags": [
+          "StudentNotifications"
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationDto"
+                  }
                 }
               }
             }
@@ -1117,7 +1233,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/NotificationResponse"
+                    "$ref": "#/components/schemas/NotificationDto"
                   }
                 }
               }
@@ -1149,6 +1265,45 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/notifications/send": {
+      "post": {
+        "tags": [
+          "AdminNotifications"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendNotificationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendNotificationRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1651,10 +1806,10 @@
         }
       }
     },
-    "/api/admin/sign-in": {
+    "/api/admin/auth/sign-in": {
       "post": {
         "tags": [
-          "admin-mx"
+          "AdminAuthentication"
         ],
         "requestBody": {
           "content": {
@@ -1669,18 +1824,67 @@
         "responses": {
           "200": {
             "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
     },
-    "/api/admin/me": {
-      "get": {
+    "/api/admin/auth/sign-out": {
+      "post": {
         "tags": [
-          "admin-mx"
+          "AdminAuthentication"
         ],
         "responses": {
           "200": {
             "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/admin/auth/me": {
+      "get": {
+        "tags": [
+          "AdminAuthentication"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetMeAdminResponseType"
+                }
+              }
+            }
           }
         }
       }
@@ -2037,6 +2241,37 @@
           }
         }
       },
+      "GetMeAdminResponseType": {
+        "required": [
+          "userName",
+          "organizationUnitName",
+          "institutionId",
+          "permissions"
+        ],
+        "type": "object",
+        "properties": {
+          "userName": {
+            "type": "string"
+          },
+          "organizationUnitName": {
+            "type": "string"
+          },
+          "institutionId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrganizationPermission"
+            }
+          }
+        }
+      },
       "GetMeResponse": {
         "required": [
           "fullName",
@@ -2136,7 +2371,11 @@
         }
       },
       "InstitutionType": {
-        "type": "integer"
+        "enum": [
+          "Authority",
+          "University",
+          "College"
+        ]
       },
       "LibraryCategoryLinkDto": {
         "required": [
@@ -2268,16 +2507,24 @@
           }
         }
       },
-      "NotificationResponse": {
+      "NotificationDto": {
         "required": [
+          "id",
           "title",
           "message",
           "state",
-          "targetId",
           "createdAt"
         ],
         "type": "object",
         "properties": {
+          "id": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
           "title": {
             "type": "string"
           },
@@ -2287,14 +2534,6 @@
           "state": {
             "$ref": "#/components/schemas/NotificationStatus"
           },
-          "targetId": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -2302,7 +2541,25 @@
         }
       },
       "NotificationStatus": {
-        "type": "integer"
+        "enum": [
+          "Info",
+          "Success",
+          "Warning",
+          "Event"
+        ]
+      },
+      "NotificationTarget": {
+        "enum": [
+          "Institution",
+          "Student"
+        ]
+      },
+      "OrganizationPermission": {
+        "enum": [
+          "ManageOrg",
+          "NavigateHierarchy",
+          "ManageInst"
+        ]
       },
       "OrganizationUnitResponse": {
         "required": [
@@ -2313,6 +2570,7 @@
           "institutionName",
           "adminOwnerId",
           "adminOwnerName",
+          "permissions",
           "createdAt",
           "updatedAt"
         ],
@@ -2353,6 +2611,12 @@
           },
           "adminOwnerName": {
             "type": "string"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "createdAt": {
             "type": "string",
@@ -2402,6 +2666,28 @@
           }
         }
       },
+      "RefreshTokenRequest": {
+        "required": [
+          "refreshToken"
+        ],
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string"
+          }
+        }
+      },
+      "RegisterTokenRequest": {
+        "required": [
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        }
+      },
       "SectionDto": {
         "required": [
           "id",
@@ -2426,6 +2712,38 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "SendNotificationRequest": {
+        "required": [
+          "title",
+          "message",
+          "state",
+          "targetId",
+          "target"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/NotificationStatus"
+          },
+          "targetId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "target": {
+            "$ref": "#/components/schemas/NotificationTarget"
           }
         }
       },
@@ -2621,6 +2939,12 @@
               "null",
               "string"
             ]
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -2668,6 +2992,9 @@
       "name": "StudentLibrary"
     },
     {
+      "name": "StudentNotifications"
+    },
+    {
       "name": "AdminInstitutions"
     },
     {
@@ -2698,7 +3025,7 @@
       "name": "AdminLibraryFiles"
     },
     {
-      "name": "admin-mx"
+      "name": "AdminAuthentication"
     }
   ]
 }

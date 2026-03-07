@@ -1,6 +1,7 @@
 # Generated files
 apis_*.dart
 lib/generated/
+models/
 
 # Dart related
 .dart_tool/

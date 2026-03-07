@@ -19,7 +19,7 @@ void main(List<String> arguments) {
   final argResults = parser.parse(arguments);
 
   if (argResults['help']) {
-    print('OpenAPI Dart Scheme Generator - Version 1.0.1');
+    print('OpenAPI Dart Scheme Generator - Version 1.0.4');
     print('Usage: dart run bin/scheme_gen.dart [options]');
     print(parser.usage);
     exit(0);
@@ -79,16 +79,16 @@ class OpenApiGenerator {
 
       final buffer = StringBuffer();
       buffer.writeln('// Generated code from OpenAPI spec');
-      buffer.writeln('import \'dart:convert\';');
       buffer.writeln();
 
       // Generate Models
       for (final entry in tagSchemas.entries) {
-        _generateModelClass(
-          buffer,
-          entry.key,
-          entry.value as Map<String, dynamic>,
-        );
+        final schema = entry.value as Map<String, dynamic>;
+        if (schema['enum'] != null) {
+          _generateEnumClass(buffer, entry.key, schema);
+        } else {
+          _generateModelClass(buffer, entry.key, schema);
+        }
       }
 
       final outputFileName =
@@ -101,6 +101,51 @@ class OpenApiGenerator {
       file.writeAsStringSync(buffer.toString());
       print('DONE: Generated $outputFileName');
     }
+  }
+
+  void _generateEnumClass(
+    StringBuffer buffer,
+    String className,
+    Map<String, dynamic> schema,
+  ) {
+    final enumValues = schema['enum'] as List<dynamic>;
+    buffer.writeln('enum $className {');
+    for (final value in enumValues) {
+      String name = value.toString().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+      // Ensure name doesn't start with a number
+      if (RegExp(r'^[0-9]').hasMatch(name)) {
+        name = 'v$name';
+      }
+      buffer.writeln('  $name,');
+    }
+    buffer.writeln('}');
+    buffer.writeln();
+
+    // ToJson for enum extension
+    buffer.writeln('extension ${className}Extension on $className {');
+    buffer.writeln('  String get value {');
+    buffer.writeln('    switch (this) {');
+    for (final value in enumValues) {
+      String name = value.toString().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+      if (RegExp(r'^[0-9]').hasMatch(name)) name = 'v$name';
+      buffer.writeln('      case $className.$name:');
+      buffer.writeln('        return \'$value\';');
+    }
+    buffer.writeln('    }');
+    buffer.writeln('  }');
+    buffer.writeln('}');
+    buffer.writeln();
+
+    // FromJson helper
+    buffer.writeln('$className ${className}FromJson(dynamic json) {');
+    buffer.writeln('  return $className.values.firstWhere(');
+    buffer.writeln('    (e) => e.value == json.toString(),');
+    buffer.writeln(
+      '    orElse: () => $className.${enumValues.first.toString().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')},',
+    );
+    buffer.writeln('  );');
+    buffer.writeln('}');
+    buffer.writeln();
   }
 
   Map<String, Set<String>> _collectSchemasByTag() {
@@ -183,6 +228,7 @@ class OpenApiGenerator {
         }
       }
     }
+
     walk(schema);
     return refs;
   }
@@ -195,7 +241,6 @@ class OpenApiGenerator {
     if (schema['type'] != 'object') return;
 
     final properties = schema['properties'] as Map<String, dynamic>? ?? {};
-   
 
     final Map<String, bool> isNullableMap = {};
     for (final propName in properties.keys) {
@@ -207,7 +252,7 @@ class OpenApiGenerator {
       } else if (propSchema['nullable'] == true) {
         canBeNull = true;
       }
-      isNullableMap[propName] =  canBeNull;
+      isNullableMap[propName] = canBeNull;
     }
 
     buffer.writeln('class $className {');
@@ -224,7 +269,9 @@ class OpenApiGenerator {
     // Constructor
     buffer.writeln('  $className({');
     for (final propName in properties.keys) {
-      buffer.writeln('    ${isNullableMap[propName]! ? '' : 'required'} this.$propName,');
+      buffer.writeln(
+        '    ${isNullableMap[propName]! ? '' : 'required'} this.$propName,',
+      );
     }
     buffer.writeln('  });');
     buffer.writeln();
@@ -250,7 +297,10 @@ class OpenApiGenerator {
     // ToJson
     buffer.writeln('  Map<String, dynamic> toJson() => {');
     for (final propName in properties.keys) {
-      buffer.writeln('    \'$propName\': $propName,');
+      final propSchema = properties[propName] as Map<String, dynamic>;
+      final isNullable = isNullableMap[propName]!;
+      final toJsonExpr = _getToJsonExpression(propSchema, propName, isNullable);
+      buffer.writeln('    \'$propName\': $toJsonExpr,');
     }
     buffer.writeln('  };');
 
@@ -263,16 +313,21 @@ class OpenApiGenerator {
     if (ref != null) {
       final name = ref.split('/').last;
       final refSchema = allSchemas[name];
+      if (refSchema != null && refSchema['enum'] != null) {
+        return name;
+      }
       if (refSchema != null && refSchema['type'] == 'object') return name;
       return refSchema != null ? _getDartType(refSchema) : 'dynamic';
     }
 
     final type = schema['type'];
-    if (type is List) {
-      return _getTypeFromList(type, schema);
-    } else {
-      return _mapTypeToDart(type as String?, schema);
+    if (type != null) {
+      return (type is List)
+          ? _getTypeFromList(type, schema)
+          : _mapTypeToDart(type as String?, schema);
     }
+
+    return 'dynamic';
   }
 
   String _getTypeFromList(List<dynamic> types, Map<String, dynamic> schema) {
@@ -295,6 +350,17 @@ class OpenApiGenerator {
   }
 
   String _mapTypeToDart(String? type, Map<String, dynamic> schema) {
+    final format = schema['format'] as String?;
+    if (format != null) {
+      switch (format) {
+        case 'int32':
+          return 'int';
+        case 'date-time':
+          return 'DateTime';
+        case 'uuid':
+          return 'String';
+      }
+    }
     switch (type) {
       case 'string':
         return 'String';
@@ -322,6 +388,12 @@ class OpenApiGenerator {
     if (ref != null) {
       final name = ref.split('/').last;
       final refSchema = allSchemas[name];
+
+      if (refSchema != null && refSchema['enum'] != null) {
+        final expr = '${name}FromJson($access)';
+        return isNullable ? '$access != null ? $expr : null' : expr;
+      }
+
       if (refSchema != null && refSchema['type'] == 'object') {
         final expr = '$name.fromJson($access)';
         return isNullable ? '$access != null ? $expr : null' : expr;
@@ -336,6 +408,13 @@ class OpenApiGenerator {
       if (itemRef != null) {
         final itemName = itemRef.split('/').last;
         final itemSchema = allSchemas[itemName];
+
+        if (itemSchema != null && itemSchema['enum'] != null) {
+          final mapExpr =
+              '($access as List).map((e) => ${itemName}FromJson(e)).toList()';
+          return isNullable ? '$access != null ? $mapExpr : null' : mapExpr;
+        }
+
         if (itemSchema != null && itemSchema['type'] == 'object') {
           final mapExpr =
               '($access as List).map((e) => $itemName.fromJson(e)).toList()';
@@ -351,6 +430,45 @@ class OpenApiGenerator {
 
       final listExpr = 'List.from($access)';
       return isNullable ? '$access != null ? $listExpr : null' : listExpr;
+    }
+
+    return access;
+  }
+
+  String _getToJsonExpression(
+    Map<String, dynamic> schema,
+    String access,
+    bool isNullable,
+  ) {
+    final ref = schema['\$ref'] as String?;
+    if (ref != null) {
+      final name = ref.split('/').last;
+      final refSchema = allSchemas[name];
+      if (refSchema != null && refSchema['enum'] != null) {
+        final expr = '$access.value';
+        return isNullable ? '$access != null ? $expr : null' : expr;
+      }
+      if (refSchema != null && refSchema['type'] == 'object') {
+        final expr = '$access.toJson()';
+        return isNullable ? '$access != null ? $expr : null' : expr;
+      }
+    }
+
+    if (schema['type'] == 'array') {
+      final items = schema['items'] as Map<String, dynamic>;
+      final itemRef = items['\$ref'] as String?;
+      if (itemRef != null) {
+        final itemName = itemRef.split('/').last;
+        final itemSchema = allSchemas[itemName];
+        if (itemSchema != null && itemSchema['enum'] != null) {
+          final expr = '$access.map((e) => e.value).toList()';
+          return isNullable ? '$access != null ? $expr : null' : expr;
+        }
+        if (itemSchema != null && itemSchema['type'] == 'object') {
+          final expr = '$access.map((e) => e.toJson()).toList()';
+          return isNullable ? '$access != null ? $expr : null' : expr;
+        }
+      }
     }
 
     return access;
